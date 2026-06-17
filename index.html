@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Árbol Genealógico Dinámico</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <label>📁 CSV:</label>
+            <input type="file" id="file-input" accept=".csv" style="display:none">
+            <button onclick="document.getElementById('file-input').click()">Cargar</button>
+            <button onclick="exportCSV()" class="success">💾 Exportar</button>
+        </div>
+        
+        <div class="toolbar-group">
+            <button id="new-person-btn" style="background:#018786;">➕ Nueva Persona</button>
+            <button id="edit-mode-btn" style="background:#3700b3;">✏️ Editar Persona</button>
+        </div>
+        
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="🔍 Buscar persona...">
+            <div id="search-results"></div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item"><div class="legend-color" style="background:#3498db;"></div><span>Padres→Hijos</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#e74c3c;"></div><span>Matrimonio</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#2ecc71;"></div><span>Hermanos</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#27ae60;"></div><span>Vivo</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#95a5a6;"></div><span>Fallecido</span></div>
+        </div>
+        
+        <div class="toolbar-group">
+            <button onclick="fitView()">🔍 Ajustar Vista</button>
+            <button onclick="resetView()">⟳ Reiniciar</button>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div class="tree-container">
+            <div id="mynetwork"></div>
+        </div>
+        <div class="details-panel">
+            <h2 id="person-header">Seleccione una persona</h2>
+            <div id="person-image-container">
+                <p class="no-data">Seleccione un nodo para ver detalles</p>
+            </div>
+            <div id="person-details">
+                <div id="life-dates"></div>
+                <div id="life-places"></div>
+                <div class="detail-item" id="parents-info"><span class="detail-label">👨‍👩‍👧 Padres:</span> -</div>
+                <div class="detail-item" id="children-info"><span class="detail-label">👶 Hijos:</span> -</div>
+                <div class="detail-item" id="marriages-info"><span class="detail-label">💍 Cónyuges:</span> -</div>
+                <div class="detail-item" id="siblings-info"><span class="detail-label">👥 Hermanos:</span> -</div>
+                <div class="comments-section" id="comments-info"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDITOR -->
+    <div id="editor-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Nueva Persona</h2>
+                <button class="close-modal" onclick="closeModal()">✖</button>
+            </div>
+            <form id="person-form">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label>Nombres y Apellidos *</label>
+                        <input type="text" id="edit-nombres" required>
+                    </div>
+                    <div class="form-field">
+                        <label>ID (automático)</label>
+                        <input type="text" id="edit-id" readonly style="background:#3a3a3a;">
+                    </div>
+                    <div class="form-field">
+                        <label>Fecha Nacimiento (DD/MM/AAAA)</label>
+                        <input type="text" id="edit-nacimiento" placeholder="DD/MM/AAAA">
+                    </div>
+                    <div class="form-field">
+                        <label>Fecha Fallecimiento</label>
+                        <input type="text" id="edit-fallecimiento" placeholder="DD/MM/AAAA">
+                    </div>
+                    <div class="form-field">
+                        <label>Lugar Nacimiento</label>
+                        <input type="text" id="edit-nacimiento-lugar">
+                    </div>
+                    <div class="form-field">
+                        <label>Lugar Fallecimiento</label>
+                        <input type="text" id="edit-fallecimiento-lugar">
+                    </div>
+                    <div class="form-field full-width">
+                        <label>País</label>
+                        <input type="text" id="edit-pais">
+                    </div>
+                    <div class="form-field full-width">
+                        <label>Comentarios</label>
+                        <textarea id="edit-comentarios" rows="3"></textarea>
+                    </div>
+                    <div class="form-field full-width">
+                        <label>Imagen (URL o ruta)</label>
+                        <input type="text" id="edit-imagen" placeholder="fotos/nombre.jpg">
+                    </div>
+                    
+                    <!-- PADRES - Con buscador -->
+                    <div class="form-field full-width">
+                        <label>👨‍👩‍👧 Padres</label>
+                        <div class="relation-selector">
+                            <div class="search-select-container">
+                                <input type="text" class="search-select-input" id="parent-search" placeholder="🔍 Buscar persona..." autocomplete="off">
+                                <div class="search-select-dropdown" id="parent-dropdown"></div>
+                            </div>
+                            <button type="button" onclick="addRelationFromSearch('padres')">➕ Agregar</button>
+                            <div id="parents-tags" class="relation-items"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- HIJOS - Con buscador -->
+                    <div class="form-field full-width">
+                        <label>👶 Hijos</label>
+                        <div class="relation-selector">
+                            <div class="search-select-container">
+                                <input type="text" class="search-select-input" id="children-search" placeholder="🔍 Buscar persona..." autocomplete="off">
+                                <div class="search-select-dropdown" id="children-dropdown"></div>
+                            </div>
+                            <button type="button" onclick="addRelationFromSearch('hijos')">➕ Agregar</button>
+                            <div id="hijos-tags" class="relation-items"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- MATRIMONIOS - Con buscador -->
+                    <div class="form-field full-width">
+                        <label>💍 Matrimonios (Cónyuges)</label>
+                        <div class="relation-selector">
+                            <div class="search-select-container">
+                                <input type="text" class="search-select-input" id="spouse-search" placeholder="🔍 Buscar persona..." autocomplete="off">
+                                <div class="search-select-dropdown" id="spouse-dropdown"></div>
+                            </div>
+                            <button type="button" onclick="addRelationFromSearch('matrimonios')">➕ Agregar</button>
+                            <div id="matrimonios-tags" class="relation-items"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- HERMANOS - Con buscador -->
+                    <div class="form-field full-width">
+                        <label>👥 Hermanos</label>
+                        <div class="relation-selector">
+                            <div class="search-select-container">
+                                <input type="text" class="search-select-input" id="sibling-search" placeholder="🔍 Buscar persona..." autocomplete="off">
+                                <div class="search-select-dropdown" id="sibling-dropdown"></div>
+                            </div>
+                            <button type="button" onclick="addRelationFromSearch('hermanos')">➕ Agregar</button>
+                            <div id="hermanos-tags" class="relation-items"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" onclick="closeModal()" class="danger">Cancelar</button>
+                    <button type="submit" class="success">💾 Guardar Persona</button>
+                    <button type="button" id="delete-person-btn" class="danger" style="display:none;">🗑️ Eliminar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/data.js?v=2"></script>
+    <script src="js/utils.js?v=2"></script>
+    <script src="js/network.js?v=2"></script>
+    <script src="js/relations.js?v=2"></script>
+    <script src="js/modal.js?v=2"></script>
+    <script src="js/search.js?v=2"></script>
+    <script src="js/app.js?v=2"></script>
+</body>
+</html>
